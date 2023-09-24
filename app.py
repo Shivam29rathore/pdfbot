@@ -24,7 +24,9 @@ if "pdf_qa_model" not in st.session_state:
 @st.cache_resource
 def load_llm(llm,load_in_8bit):
 
-    if llm == LLM_FLAN_T5_SMALL:
+    if llm == LLM_OPENAI_GPT35:
+        pass
+    elif llm == LLM_FLAN_T5_SMALL:
         return PdfQA.create_flan_t5_small(load_in_8bit)
     elif llm == LLM_FLAN_T5_BASE:
         return PdfQA.create_flan_t5_base(load_in_8bit)
