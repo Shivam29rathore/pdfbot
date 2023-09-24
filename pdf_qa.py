@@ -2,10 +2,13 @@ from langchain.document_loaders import PDFPlumberLoader
 from langchain.text_splitter import CharacterTextSplitter, TokenTextSplitter
 from transformers import pipeline
 from langchain.prompts import PromptTemplate
+from langchain.chat_models import ChatOpenAI
 from langchain.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from langchain import HuggingFacePipeline
 from langchain.embeddings import HuggingFaceInstructEmbeddings, HuggingFaceEmbeddings
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.llms import OpenAI
 from constants import *
 from transformers import AutoTokenizer
 import torch
@@ -121,9 +124,10 @@ class PdfQA:
         return hf_pipeline
     
     def init_embeddings(self) -> None:
-    
-        
-        if self.config["embedding"] == EMB_INSTRUCTOR_XL:
+        # OpenAI ada embeddings API
+        if self.config["embedding"] == EMB_OPENAI_ADA:
+            self.embedding = OpenAIEmbeddings()
+        elif self.config["embedding"] == EMB_INSTRUCTOR_XL:
             # Local INSTRUCTOR-XL embeddings
             if self.embedding is None:
                 self.embedding = PdfQA.create_instructor_xl()
@@ -138,8 +142,11 @@ class PdfQA:
     def init_models(self) -> None:
         """ Initialize LLM models based on config """
         load_in_8bit = self.config.get("load_in_8bit",False)
-  
-        if self.config["llm"] == LLM_FLAN_T5_SMALL:
+        # OpenAI GPT 3.5 API
+        if self.config["llm"] == LLM_OPENAI_GPT35:
+            # OpenAI GPT 3.5 API
+            pass
+        elif self.config["llm"] == LLM_FLAN_T5_SMALL:
             if self.llm is None:
                 self.llm = PdfQA.create_flan_t5_small(load_in_8bit=load_in_8bit)
         elif self.config["llm"] == LLM_FLAN_T5_BASE:
@@ -196,24 +203,26 @@ class PdfQA:
         ##TODO: Use custom prompt
         self.retriever = self.vectordb.as_retriever(search_kwargs={"k":3})
         
-        
-        hf_llm = HuggingFacePipeline(pipeline=self.llm,model_id=self.config["llm"])
+        if self.config["llm"] == LLM_OPENAI_GPT35:
+          # Use ChatGPT API
+          self.qa = RetrievalQA.from_chain_type(llm=OpenAI(model_name=LLM_OPENAI_GPT35, temperature=0.), chain_type="stuff",\
+                                      retriever=self.vectordb.as_retriever(search_kwargs={"k":3}))
+        else:
+            hf_llm = HuggingFacePipeline(pipeline=self.llm,model_id=self.config["llm"])
 
-        self.qa = RetrievalQA.from_chain_type(llm=hf_llm, chain_type="stuff",retriever=self.retriever)
-        if self.config["llm"] == LLM_FLAN_T5_SMALL or self.config["llm"] == LLM_FLAN_T5_BASE or self.config["llm"] == LLM_FLAN_T5_LARGE:
-            question_t5_template = """
-            context: {context}
-            question: {question}
-            answer: 
-            """
-            QUESTION_T5_PROMPT = PromptTemplate(
-                template=question_t5_template, input_variables=["context", "question"]
-            )
-            self.qa.combine_documents_chain.llm_chain.prompt = QUESTION_T5_PROMPT
-        self.qa.combine_documents_chain.verbose = True
-        self.qa.return_source_documents = True
-
-
+            self.qa = RetrievalQA.from_chain_type(llm=hf_llm, chain_type="stuff",retriever=self.retriever)
+            if self.config["llm"] == LLM_FLAN_T5_SMALL or self.config["llm"] == LLM_FLAN_T5_BASE or self.config["llm"] == LLM_FLAN_T5_LARGE:
+                question_t5_template = """
+                context: {context}
+                question: {question}
+                answer: 
+                """
+                QUESTION_T5_PROMPT = PromptTemplate(
+                    template=question_t5_template, input_variables=["context", "question"]
+                )
+                self.qa.combine_documents_chain.llm_chain.prompt = QUESTION_T5_PROMPT
+            self.qa.combine_documents_chain.verbose = True
+            self.qa.return_source_documents = True
     def answer_query(self,question:str) ->str:
         """
         Answer the question
