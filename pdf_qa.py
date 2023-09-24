@@ -124,10 +124,8 @@ class PdfQA:
         return hf_pipeline
     
     def init_embeddings(self) -> None:
-        # OpenAI ada embeddings API
-        if self.config["embedding"] == EMB_OPENAI_ADA:
-            self.embedding = OpenAIEmbeddings()
-        elif self.config["embedding"] == EMB_INSTRUCTOR_XL:
+    
+        if self.config["embedding"] == EMB_INSTRUCTOR_XL:
             # Local INSTRUCTOR-XL embeddings
             if self.embedding is None:
                 self.embedding = PdfQA.create_instructor_xl()
